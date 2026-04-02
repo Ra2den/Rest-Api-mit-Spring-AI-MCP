@@ -1,6 +1,8 @@
 package com.example.restapimitspringaimcp;
 
-import jdk.jfr.Description;
+import com.example.restapimitspringaimcp.model.FacultySummary;
+import com.example.restapimitspringaimcp.model.RoomAvailability;
+import com.example.restapimitspringaimcp.model.RoomSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +12,6 @@ import org.springframework.web.client.RestClient;
 
 import java.time.LocalTime;
 import java.time.temporal.ChronoField;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -19,50 +20,16 @@ public class RaumZeitService {
     private final Logger logger = LoggerFactory.getLogger(RaumZeitService.class);
     private final RestClient restClient;
 
-    // Hier ziehen wir den Token aus der Umgebungsvariable
     @Value("${RAUMZEIT_BEARER_TOKEN}")
     private String apiToken;
 
-    public RaumZeitService(RestClient.Builder builder) {
+    @Value("${raumzeit.baseurl}")
+    private String baseUrl;
+
+    public RaumZeitService(RestClient.Builder builder, @Value("${raumzeit.baseurl}") String baseUrl) {
         // Basis-URL deiner API
-        this.restClient = builder.baseUrl("https://raumzeit.hka-iwi.de").build();
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
-
-
-
-    public record RoomSummary(
-            String name,
-
-            // Wir nennen es camelCase und erklären der KI, dass es die Kategorie ist
-            @Description("Die Kategorie des Raums. WICHTIG: Ignoriere Büros und Serverräume, außer es wird explizit danach gefragt.")
-            RoomType roomType,
-
-            @Description("Die maximale Anzahl der Sitzplätze/Stühle für Personen.")
-            int capacity,
-
-            @Description("Technische Ausstattung für Präsentationen (z.B. Beamer, Projektor).")
-            String videoEquipment,
-
-            @Description("Anzahl der Computer-Arbeitsplätze. Der Wert -1 bedeutet: Es sind keine PCs vorhanden.")
-            int pcWorkstations
-    ) {}
-
-    public record RoomType(
-            // Die HKA API liefert hier meist ein Array von Strings (Deutsch/Englisch)
-            @Description("Verschiedene Bezeichnungen für den Raumtyp (z.B. 'Hörsaal', 'Lecture hall').")
-            String[] longNames
-    ) {}
-
-    public record FacultySummary(
-            String name,
-            String longName,
-            boolean faculty
-    ){}
-
-    public record RoomAvailability(
-            int endTime,
-            int startTime
-    ){}
 
     public List<RoomSummary> fetchRooms(String building) {
         List<RoomSummary> allRooms = restClient.get()
