@@ -8,10 +8,10 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.time.temporal.ChronoField;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Stream;
 
 
@@ -61,7 +61,7 @@ public class RaumZeitService {
                             });
                 })
                 .toList();
-        System.out.println("all relevant Rooms :" + blorp);
+        logger.info("all relevant Rooms :{}",blorp);
         return blorp;
     }
 
@@ -93,7 +93,7 @@ public class RaumZeitService {
                             });
 
         }).toList();
-        System.out.println("Uncommon Rooms : " + filteredRooms);
+        logger.info("Uncommon Rooms : {}", filteredRooms);
         return filteredRooms;
     }
 
@@ -113,7 +113,7 @@ public class RaumZeitService {
                             .noneMatch(a -> now >= a.startTime() && now <= a.endTime());
                 })
                 .toList();
-        System.out.println("Free Rooms : " + glorp);
+        logger.info("Free Rooms : {}", glorp);
         return glorp;
     }
 
@@ -129,7 +129,7 @@ public class RaumZeitService {
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<RoomAvailability>>() {});
         } catch (Exception e) {
-            System.err.println("Fehler beim Laden für Raum " + roomName + ": " + e.getMessage());
+            logger.error("Fehler beim Laden für Raum {} : {}", roomName, e.getMessage());
             return List.of();
         }
     }
@@ -155,6 +155,7 @@ public class RaumZeitService {
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/v1/timetables/room/{room}")
                         .queryParam("week", "true")
+                        .queryParam("date", "2026-05-15")
                         .build(roomName))
                 .header("Authorization", "Bearer " + apiToken)
                 .header("Accept", "application/json") // Wichtig laut Doku!
@@ -163,16 +164,18 @@ public class RaumZeitService {
     }
 
     public List<FullRoomInfo> getSingleRoomInfo(String roomName) {
-
         List<RoomDetail> details = getRoomDetail(roomName);
-        List<RoomAssignment> assignments = getRoomWeekAssignment(roomName);
+        List<RoomAssignment> rawAssignments = getRoomWeekAssignment(roomName);
 
         if (details == null || details.isEmpty()) {
             return List.of();
         }
 
-        FullRoomInfo fullInfo = new FullRoomInfo(details.getFirst(), assignments);
-        System.out.println("Volle Rauminfo : " + fullInfo);
+        // HIER passiert die Magie: Wir waschen die Daten, bevor sie zur KI gehen
+        Map<String, List<FormattedAssignment>> cleanTimetable = formatTimetable(rawAssignments);
+
+        FullRoomInfo fullInfo = new FullRoomInfo(details.getFirst(), cleanTimetable);
+        logger.info("Volle Rauminfo : {}", fullInfo);
 
         return List.of(fullInfo);
     }
@@ -207,7 +210,7 @@ public class RaumZeitService {
         List<FacultySummary> tmp = message.stream()
                 .filter(FacultySummary::faculty) // Behält nur Einträge, bei denen faculty true ist
                 .toList();
-        System.out.println("Faculty List : " + tmp);
+        logger.info("Faculty List : {}", tmp);
         return tmp;
     }
 
@@ -217,7 +220,63 @@ public class RaumZeitService {
                 .header("Authorization", "Bearer " + apiToken)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<StripedMHB>>() {});
-        System.out.println("stripped modulehandbook : " + message);
+        logger.info("stripped modulehandbook : {}", message);
         return message;
+    }
+
+
+    private Map<String, List<FormattedAssignment>> formatTimetable(List<RoomAssignment> rawAssignments) {
+        // LinkedHashMap garantiert, dass die Tage in der richtigen Reihenfolge bleiben
+        Map<String, List<FormattedAssignment>> weeklyPlan = new LinkedHashMap<>();
+        weeklyPlan.put("Montag", new ArrayList<>());
+        weeklyPlan.put("Dienstag", new ArrayList<>());
+        weeklyPlan.put("Mittwoch", new ArrayList<>());
+        weeklyPlan.put("Donnerstag", new ArrayList<>());
+        weeklyPlan.put("Freitag", new ArrayList<>());
+
+        if (rawAssignments == null) return weeklyPlan;
+
+        for (RoomAssignment a : rawAssignments) {
+            // 1. Wochentag aus dem firstDate ermitteln
+            String day = getGermanDay(a.firstDate().getDayOfWeek());
+
+            // 2. Zeit formatieren (480 -> "08:00")
+            String zeit = formatTime(a.startTime()) + " - " + formatTime(a.endTime());
+
+            // 3. Absagen lesbar machen
+            List<String> absagen = a.cancellations().stream()
+                    .map(c -> {
+                        String datum = c.timestamp().split("T")[0]; // Nimmt nur das Datum YYYY-MM-DD
+                        String grund = c.reason().isBlank() ? "" : " (" + c.reason() + ")";
+                        return "Abgesagt am " + datum + grund;
+                    })
+                    .toList();
+
+            // 4. In unser neues, sauberes Format packen
+            FormattedAssignment fa = new FormattedAssignment(zeit, a.longName(), a.contact(), absagen);
+
+            // 5. In den richtigen Wochentag einsortieren
+            weeklyPlan.computeIfAbsent(day, k -> new ArrayList<>()).add(fa);
+        }
+
+        return weeklyPlan;
+    }
+
+    // Hilfsmethode 1: Minuten in HH:mm umwandeln
+    private String formatTime(int minutes) {
+        return String.format("%02d:%02d", minutes / 60, minutes % 60);
+    }
+
+    // Hilfsmethode 2: Englische Enum-Tage in deutsche Strings übersetzen
+    private String getGermanDay(DayOfWeek day) {
+        return switch (day) {
+            case MONDAY -> "Montag";
+            case TUESDAY -> "Dienstag";
+            case WEDNESDAY -> "Mittwoch";
+            case THURSDAY -> "Donnerstag";
+            case FRIDAY -> "Freitag";
+            case SATURDAY -> "Samstag";
+            case SUNDAY -> "Sonntag";
+        };
     }
 }
