@@ -4,7 +4,6 @@ import jdk.jfr.Description;
 public record RoomSummary(
         String name,
 
-        // Wir nennen es camelCase und erklären der KI, dass es die Kategorie ist
         @Description("Die Kategorie des Raums. WICHTIG: Ignoriere Büros und Serverräume, außer es wird explizit danach gefragt.")
         RoomType roomType,
 

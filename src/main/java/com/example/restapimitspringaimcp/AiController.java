@@ -1,5 +1,6 @@
 package com.example.restapimitspringaimcp;
 
+import com.example.restapimitspringaimcp.model.*;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -21,28 +22,60 @@ class RaumZeitTools {
     }
 
     @Tool(description = "Gibt eine Liste aller Räume zurück. Wird nach einem Gebäude gefiltert. Priorisiere Räume die nicht im UG sind. Die folgenden Raumtypen werden nicht angezeigt und herausgefiltert : Büro, Serverraum, Sekretariat, Online")
-    public List getRooms(
-            @ToolParam(description = "Building ist ein Einzelner Buchstabe aus [E,F,M,K,B,I,N,LI]. Rufe niemals ohne diesen Parameter auf, frage sonst nach dem Gebäude falls du dir unsicher bist")String building
+    public List<RoomSummary>getRooms(
+            @ToolParam(description = "Building ist ein Einzelner Buchstabe aus [E,F,M,K,B,I,N,LI]. Rufe niemals ohne diesen Parameter auf, frage sonst nach dem Gebäude falls du dir unsicher bist")
+            String building
     ) {
         System.out.println("Rufe getRooms mit Gebäude : " + building + " auf");
         return raumZeitService.fetchRooms(building);
     }
 
     @Tool(description = "Gibt eine Liste aller zur jetzigen Uhrzeit nicht belegten Räume zurück. Wird nach einem Gebäude gefiltert")
-    public  List freeRooms(
-            @ToolParam(description = "Building ist ein Einzelner Buchstabe aus [E,F,M,K,B,I,N,LI]. Rufe niemals ohne diesen Parameter auf, frage sonst nach dem Gebäude falls du dir unsicher bist. Die folgenden Raumtypen werden nicht angezeigt und herausgefiltert : Büro, Serverraum, Sekretariat, Online")String building
+    public  List<RoomSummary> freeRooms(
+            @ToolParam(description = "Building ist ein Einzelner Buchstabe aus [E,F,M,K,B,I,N,LI]. Rufe niemals ohne diesen Parameter auf, frage sonst nach dem Gebäude falls du dir unsicher bist. Die folgenden Raumtypen werden nicht angezeigt und herausgefiltert : Büro, Serverraum, Sekretariat, Online")
+            String building
     ) {
         System.out.println("Rufe getFreeRooms mit Gebäude : " + building + " auf");
         return raumZeitService.getFreeRooms(building);
     }
 
-    /*
-    @Tool(description = "Liefert eine Liste aller Fakultätsnamen und deren zugehörige KÜRZEL. Nutze dieses Tool ZUERST, wenn der Nutzer einen Namen (z.B. 'Informatik') nennt, du aber das Kürzel für die Raumabfrage noch nicht kennst.")
-    public List getFaculties(){
-        return raumZeitService.fetchFaculties();
+    @Tool(description = "Gibt doe vollständige Information zu einem EINZELNEN Raum. Diese besteht aus statischen Rauminformationen, und der Raumbelegung für die aktuelle Woche. Formatiere die Raumbelegung nach Wochentagen(Montag,Dienstag,Mittwoch,Donnerstag,Freitag")
+    public List<FullRoomInfo>getFullRoomInfo(
+            @ToolParam(description = "es wird ein einzelner Raum uebergeben. Dieser ist so aufgebaut - Gebauede-Raum (z.B. E-203). Rufe die funktion niemals ohne diesen Parameter auf. Falls du dir unsicher bist frage nochmal nach")
+            String room
+    ) {
+        System.out.println("Bekomme alle Infos zu Raum : " + room);
+        return  raumZeitService.getSingleRoomInfo((room));
     }
 
-     */
+    @Tool(description = "Gibt eine Liste aller besonderen Räume zurück also alle Räume mit der beschreibung Büro, Serverraum, Sekretariat, Online. Wird nach einem Gebäude gefiltert. Priorisiere Räume die nicht im UG sind.")
+    public List<RoomSummary>uncommonRooms(
+            @ToolParam(description = "Building ist ein Einzelner Buchstabe aus [E,F,M,K,B,I,N,LI]. Rufe niemals ohne diesen Parameter auf, frage sonst nach dem Gebäude falls du dir unsicher bist. Die folgenden Raumtypen werden nicht angezeigt und herausgefiltert : Büro, Serverraum, Sekretariat, Online")
+            String building
+    ) {
+        System.out.println("Unnormale Räume werden in Gebäude " + building + " werden aufgerufen...");
+        return  raumZeitService.getUncommonRooms(building);
+    }
+
+    @Tool(description = "Gibt eine Liste der Studiengänge an der HKA zurück. Kann nach Fakultätskürzel gefiltert werden.")
+    public List<CourseOfStudy> getCoursesOfStudy(
+            @ToolParam(description = "Das Kürzel der Fakultät (z.B. 'IWI', 'W', 'EIT', 'AB', 'IMM', 'MMT'). Falls du dir unsicher bist, ob die fakultät existiert, treffe keine annahme sondern rufe getFaculties auf um die annahme zu überprüfen")
+            String faculty
+    ) {
+        System.out.println("hole Studiengänge für : " + faculty);
+        return raumZeitService.getCoursesOfStudy(faculty);
+    }
+
+    @Tool(description = "Liefert eine Liste aller Fakultätsnamen und deren zugehörige KÜRZEL. Nutze dieses Tool ZUERST, wenn der Nutzer einen Namen (z.B. 'Informatik') nennt, du aber das Kürzel für die Raumabfrage noch nicht kennst.")
+    public List<FacultySummary> getFaculties(){
+        return raumZeitService.fetchFaculties();
+    }
+/*
+    @Tool(description = "Liefert das Modulhandbuch eines Fachs zurück. Falls du das Fachkürzel nicht kennst, kannst du das über getCourseOfStudy herausfinden. Zudem brauchst du die Prüfungsordnungsnummer. Falls du diese nicht hast MUSST du nachfragen")
+    public List<StripedMHB> getMHB(
+            @ToolParam(description = "")
+    )
+*/
 }
 
 @RestController
@@ -64,6 +97,8 @@ class AiController {
                 Benutze die dir gegebenen Tools.
                 Du willst dem Benutzer auskünfte über Räume, Studiengänge oder Veranstaltungen geben.
                 Antworte kompakt. Falls dir informationen fehlen, oder dir etwas unklar ist, frage nach.
+                Du darfst mehrere Tools hintereinander aufrufen, falls du Infos von Tool A für Paramter oder
+                Kontext für Tool B benötigst.
                 Treffe niemals annahmen.
                 """)
                 .user(q)
