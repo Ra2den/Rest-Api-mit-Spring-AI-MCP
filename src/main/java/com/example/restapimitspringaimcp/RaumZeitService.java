@@ -170,8 +170,6 @@ public class RaumZeitService {
         if (details == null || details.isEmpty()) {
             return List.of();
         }
-
-        // HIER passiert die Magie: Wir waschen die Daten, bevor sie zur KI gehen
         Map<String, List<FormattedAssignment>> cleanTimetable = formatTimetable(rawAssignments);
 
         FullRoomInfo fullInfo = new FullRoomInfo(details.getFirst(), cleanTimetable);
@@ -226,7 +224,6 @@ public class RaumZeitService {
 
 
     private Map<String, List<FormattedAssignment>> formatTimetable(List<RoomAssignment> rawAssignments) {
-        // LinkedHashMap garantiert, dass die Tage in der richtigen Reihenfolge bleiben
         Map<String, List<FormattedAssignment>> weeklyPlan = new LinkedHashMap<>();
         weeklyPlan.put("Montag", new ArrayList<>());
         weeklyPlan.put("Dienstag", new ArrayList<>());
@@ -252,22 +249,20 @@ public class RaumZeitService {
                     })
                     .toList();
 
-            // 4. In unser neues, sauberes Format packen
             FormattedAssignment fa = new FormattedAssignment(zeit, a.longName(), a.contact(), absagen);
 
-            // 5. In den richtigen Wochentag einsortieren
             weeklyPlan.computeIfAbsent(day, k -> new ArrayList<>()).add(fa);
         }
 
         return weeklyPlan;
     }
 
-    // Hilfsmethode 1: Minuten in HH:mm umwandeln
+    // Minuten in HH:mm umwandeln
     private String formatTime(int minutes) {
         return String.format("%02d:%02d", minutes / 60, minutes % 60);
     }
 
-    // Hilfsmethode 2: Englische Enum-Tage in deutsche Strings übersetzen
+    // Englische Enum-Tage in deutsche Strings übersetzen
     private String getGermanDay(DayOfWeek day) {
         return switch (day) {
             case MONDAY -> "Montag";

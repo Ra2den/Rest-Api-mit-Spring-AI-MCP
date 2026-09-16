@@ -7,18 +7,27 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.client.ChatClient;
 
 @Component
 class RaumZeitTools {
 
     private final RaumZeitService raumZeitService;
+    private final VectorStore vectorStore; // VectorStore deklarieren
 
-    public RaumZeitTools(RaumZeitService raumZeitService) {
+    // VectorStore in Konstruktor aufnehmen
+    public RaumZeitTools(RaumZeitService raumZeitService, VectorStore vectorStore) {
         this.raumZeitService = raumZeitService;
+        this.vectorStore = vectorStore;
     }
 
     @Tool(description = "Gibt eine Liste aller Räume zurück. Wird nach einem Gebäude gefiltert. Priorisiere Räume die nicht im UG sind. Die folgenden Raumtypen werden nicht angezeigt und herausgefiltert : Büro, Serverraum, Sekretariat, Online")
@@ -76,6 +85,30 @@ class RaumZeitTools {
             @ToolParam(description = "")
     )
 */
+@Tool(description = "Durchsucht das allgemeine Hochschul-Wissen (Modulhandbücher, Inhalte der Fächer, Dozenten). Nutze dies IMMER, wenn der Nutzer fachliche Fragen zu einem Studiengang, Fachinhalt oder Voraussetzungen hat.")
+public String searchHochschulWissen(
+        @ToolParam(description = "Die konkrete Suchanfrage, z.B. 'Wer lehrt Softwareprojekt?' oder 'Was ist der Inhalt von Mathematik 1?'")
+        String query
+) {
+    System.out.println("Durchsuche lokales Wissen (Vektordatenbank) nach: " + query);
+
+    // Suche die 3 relevantesten Textabschnitte zur Frage
+    List<Document> results = vectorStore.similaritySearch(
+            SearchRequest.builder()
+                    .query(query)
+                    .topK(3)
+                    .build()
+    );
+
+    if (results == null || results.isEmpty()) {
+        return "Keine passenden Informationen im lokalen Hochschul-Wissen gefunden.";
+    }
+
+    // Texte aus Dokumenten holen und mit Trennlinie verbinden
+    return results.stream()
+            .map(Document::getText)
+            .collect(Collectors.joining("\n\n---\n\n"));
+}
 }
 
 @RestController
@@ -85,7 +118,7 @@ class AiController {
 
     public AiController(ChatClient.Builder builder, RaumZeitTools raumZeitTools) {
         this.chatClient = builder
-                .defaultTools(raumZeitTools) // Name der Methode oben
+                .defaultTools(raumZeitTools)
                 .build();
     }
 
