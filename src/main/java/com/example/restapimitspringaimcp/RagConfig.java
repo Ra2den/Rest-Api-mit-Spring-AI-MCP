@@ -13,4 +13,14 @@ public class RagConfig {
         // baue Vektorstore
         return SimpleVectorStore.builder(embeddingModel).build();
     }
+/*
+    @Bean
+    public ChatMemory chatMemory() {
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .maxMessages(2) // Merkt sich die letzten 20 Nachrichten (10 Fragen, 10 Antworten) -> viel zu lang !!! speichere nur 4
+                .build();
+    }
+
+ */
 }

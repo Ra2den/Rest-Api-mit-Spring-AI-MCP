@@ -5,55 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RaumZeit KI-Assistent</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 1. Tailwind UND das offizielle Typography-Plugin (prose) laden -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+
     <link rel="icon" type="image/x-icon" href="images/hkalogo.jpg">
 
     <style>
-        /* Styles für das gerenderte Markdown innerhalb der KI-Nachricht */
+        /* Wir überschreiben ein paar Standard-Prose-Styles für unseren Chat */
+        #chat-window .prose {
+            max-width: 100%; /* Wichtig, damit es sich der Box anpasst */
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #1f2937; /* Tailwind gray-800 */
+        }
+
         #chat-window .prose table {
             width: 100%;
             border-collapse: collapse;
             margin: 10px 0;
             background: white;
+            font-size: 0.9em;
+            /* Sorgt dafür, dass große Tabellen seitlich scrollbar sind,
+               statt die Box zu sprengen oder abgeschnitten zu werden */
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
         }
+
         #chat-window .prose th, #chat-window .prose td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            padding: 8px 12px;
             text-align: left;
         }
+
         #chat-window .prose th {
-            background-color: #f3f4f6;
-            font-weight: bold;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+            font-weight: 600;
         }
+
         #chat-window .prose ul {
             list-style-type: disc;
-            margin-left: 20px;
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
         }
+
+        #chat-window .prose p {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
         #chat-window .prose strong {
-            font-weight: bold;
+            font-weight: 700;
             color: #D72305; /* HKA Rot für wichtige Begriffe */
         }
+
+        html { scroll-behavior: smooth; }
     </style>
-
 </head>
-<body class="bg-gray-100 h-screen flex flex-col">
+<body class="bg-gray-50 h-screen flex flex-col font-sans">
 
-<header class="bg-[#D72305] text-white p-4 shadow-md">
-    <h1 class="text-xl font-bold">HKA RaumZeit KI-Assistent</h1>
+<header class="bg-[#D72305] text-white p-4 shadow-md flex justify-between items-center z-10 relative">
+    <h1 class="text-xl font-bold tracking-wide">HKA RaumZeit KI</h1>
+    <button onclick="startNewChat()" class="bg-white text-[#D72305] px-4 py-1.5 rounded shadow-sm text-sm font-bold hover:bg-gray-100 transition">
+        Neuer Chat
+    </button>
 </header>
 
-<main id="chat-window" class="flex-1 overflow-y-auto p-4 space-y-4">
-    <div class="bg-blue-100 p-3 rounded-lg max-w-xs shadow-sm">
-        Hallo! Wie kann ich dir heute bei RaumZeit helfen?
+<main id="chat-window" class="flex-1 overflow-y-auto p-4 space-y-6">
+    <div class="bg-blue-50 border border-blue-100 p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] shadow-sm prose">
+        Hallo! Wie kann ich dir heute bei Fragen zu Räumen oder Studiengängen helfen?
     </div>
 </main>
 
-<footer class="p-4 bg-white border-t flex gap-2">
+<footer class="p-4 bg-white border-t shadow-[0_-2px_10px_rgba(0,0,0,0.05)] flex gap-3 z-10 relative">
     <input type="text" id="user-input"
-           class="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-           placeholder="Frage nach Räumen oder Fakultäten...">
+           class="flex-1 border border-gray-300 rounded-full px-5 py-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 transition-colors shadow-inner text-gray-800"
+           placeholder="Stelle eine Frage zu Räumen, Dozenten oder Modulen...">
     <button onclick="sendRequest()" id="send-btn"
-            class="bg-[#D72305] text-white px-6 py-2 rounded-full hover:bg-blue-700 transition">
+            class="bg-[#D72305] text-white px-8 py-3 rounded-full hover:bg-red-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium">
         Senden
     </button>
 </footer>
@@ -61,51 +92,83 @@
 <script>
     const chatWindow = document.getElementById('chat-window');
     const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    let messageCounter = 0;
+    let currentChatId = generateChatId();
+
+    function generateChatId() {
+        return 'session-' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function startNewChat() {
+        chatWindow.innerHTML = `
+            <div class="bg-blue-50 border border-blue-100 p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] shadow-sm prose">
+                Neuer Chat gestartet! Das Gedächtnis wurde gelöscht. Was möchtest du wissen?
+            </div>
+        `;
+        currentChatId = generateChatId();
+    }
 
     async function sendRequest() {
-    const query = userInput.value.trim();
-    if (!query) return;
+        const query = userInput.value.trim();
+        if (!query) return;
 
-    // 1. Deine Nachricht anzeigen
-    appendMessage(query, 'user');
-    userInput.value = '';
+        userInput.disabled = true;
+        sendBtn.disabled = true;
 
-    // 2. Lade-Indikator anzeigen (und ID merken)
-    const loadingId = appendMessage("KI denkt nach...", 'ai');
-    const loadingElement = document.getElementById(loadingId);
+        appendMessage(query, 'user');
+        userInput.value = '';
 
-    try {
-        // 3. Anfrage an Spring Boot
-        const response = await fetch(`/ask?q=${encodeURIComponent(query)}`);
-        
-        if (!response.ok) throw new Error("Server-Fehler");
-        
-        const text = await response.text();
+        const loadingId = appendMessage("KI durchsucht Datenbanken...", 'ai');
+        const loadingElement = document.getElementById(loadingId);
 
-        // 4. Antwort in das richtige Element schreiben
-        // Wir nutzen white-space: pre-wrap, damit Umbrüche der KI angezeigt werden
-        loadingElement.style.whiteSpace = "pre-wrap";
-        loadingElement.innerHTML = marked.parse(text);
-    } catch (error) {
-        loadingElement.innerText = "Fehler: Die KI konnte nicht antworten. Läuft Ollama?";
-        loadingElement.classList.add("text-red-500");
+        try {
+            const response = await fetch(`/ask?q=${encodeURIComponent(query)}&chatId=${currentChatId}`);
+            if (!response.ok) throw new Error("Server-Fehler");
+
+            const text = await response.text();
+
+            // FIX: Wir parsen das Markdown und schreiben es in das Element.
+            loadingElement.innerHTML = marked.parse(text);
+        } catch (error) {
+            loadingElement.innerText = "Fehler: Die KI konnte nicht antworten. Läuft dein Backend & Ollama?";
+            loadingElement.classList.remove("bg-blue-50", "border-blue-100");
+            loadingElement.classList.add("bg-red-50", "border-red-200", "text-red-600");
+        } finally {
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+
+            // Verzögertes Scrollen, damit Bilder/Tabellen im DOM gerendert sind
+            setTimeout(() => {
+                chatWindow.scrollTop = chatWindow.scrollHeight;
+            }, 50);
+        }
     }
-}
 
-    function appendMessage(text, sender, isLoading = false) {
-        const id = 'msg-' + Date.now();
+    function appendMessage(text, sender) {
+        messageCounter++;
+        const id = 'msg-' + messageCounter;
+
         const div = document.createElement('div');
         div.id = id;
-        div.className = sender === 'user'
-            ? "bg-gray-200 p-3 rounded-lg max-w-md ml-auto shadow-sm"
-            : "bg-blue-100 p-3 rounded-lg max-w-md shadow-sm prose";
-        div.innerText = text;
+
+        // FIX: break-words und overflow-hidden (in Kombination mit scrollbaren Tabellen oben)
+        // verhindert, dass Text aus der Box ausbricht.
+        if (sender === 'user') {
+            div.className = "bg-gray-200 border border-gray-300 p-4 rounded-2xl rounded-tr-sm max-w-[85%] sm:max-w-[75%] ml-auto shadow-sm break-words";
+            div.innerText = text; // Bei User-Input einfach als Text
+        } else {
+            div.className = "bg-blue-50 border border-blue-100 p-4 rounded-2xl rounded-tl-sm max-w-[85%] sm:max-w-[75%] shadow-sm prose break-words";
+            div.innerText = text; // Initialer Lade-Text
+        }
+
         chatWindow.appendChild(div);
         chatWindow.scrollTop = chatWindow.scrollHeight;
         return id;
     }
 
-    // Senden mit Enter-Taste
     userInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendRequest();
     });
